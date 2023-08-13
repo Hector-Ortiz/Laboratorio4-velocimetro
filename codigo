@@ -1,0 +1,181 @@
+#include <ESP32Servo.h>
+Servo servo; 
+// el funcionamiento de los botones y LEDS
+const int rojo = 18;
+const int verde = 19;
+const int azul = 21;
+const int Bintensidad = 2;
+const int Bderecha = 22;
+const int Bizquierda = 23;
+const int Bvelocidad = 4;
+const int pinServo = 5;
+// Funciones especiales como brillo que indica la intensidad de los leds, o las pulsaciones para controlar que tan fuerte esta el led
+int brillo = 0; // el brillo inicial de los leds
+int IntensidadPorPulsacion = 255 / 4; // La intensidad maxima es 255 entonces se divide en 4 para indicar que cada 4 pulsaciones aumentara el led
+int posicion = 0; // posicionamiento del servomotor
+
+bool LEDS = false; // el funcionamiento de cada uno de los leds
+int cambio = 0; // cuando se seleccione un led, solo cambiara el led que esta encendido o el funcionamiento de los 3 leds
+bool botonInt = false; // Funcionamiento del boton de intensidad
+
+bool velocimetro = false; // funcionamiento del boton del servo con los leds
+bool velocimetroA = false; // el estado anterior del boton del servo con los leds
+bool bloqueo = false; //Cuando se estan usando los botones de intensidad o de los cambios del servomotor libre, puse un bloqueo
+
+void setup() {
+  Serial.begin(115200);
+// Estado de todas las salidas de los puertos como leds o botones
+  pinMode(rojo, OUTPUT);
+  pinMode(verde, OUTPUT);
+  pinMode(azul, OUTPUT);
+  pinMode(Bintensidad, INPUT_PULLUP);
+  pinMode(Bderecha, INPUT_PULLUP);
+  pinMode(Bizquierda, INPUT_PULLUP);
+  pinMode(Bvelocidad, INPUT_PULLUP);
+// Estado de la salida del servomotor y en que posicion va a iniciar al encender
+  pinMode(pinServo, OUTPUT);
+  servo.attach(pinServo, 500, 2500);
+
+  moverServo(0); // Iniciar el servo en 0 grados al inicio
+  analogWrite(rojo, brillo);
+  analogWrite(verde, brillo);
+  analogWrite(azul, brillo);
+}
+
+void loop() {
+  botonInt = digitalRead(Bintensidad) == LOW;
+// Acciones relacionadas al botón 1 (intensidad de LED o RGB)
+  if (botonInt && !bloqueo) {
+    delay(50);
+    if (!LEDS) {
+      if (posicion == 45) {
+        analogWrite(rojo, brillo);
+      } else if (posicion == 135) {
+        analogWrite(verde, brillo);
+      } else if (posicion == 180) {
+        analogWrite(azul, brillo);
+      } else if (posicion == 0) {
+        analogWrite(rojo, brillo);
+        analogWrite(verde, brillo);
+        analogWrite(azul, brillo);
+      }
+    }
+    brillo += IntensidadPorPulsacion;
+    if (brillo > 255) {
+      brillo = 0;
+    }
+    actualizarLeds();
+    delay(200);
+  }
+
+  if (digitalRead(Bderecha) == LOW && !bloqueo) {
+    // Acciones que mueven a la derecha con el botón 2 (mover servo a 180 grados)
+    delay(50);
+    moverServo(180);
+    delay(1000);
+    if (posicion == 0) {
+      LEDS = true;
+      ledCambio();
+    }
+  }
+
+  if (digitalRead(Bizquierda) == LOW && !bloqueo) {
+    // Acciones que mueven a la izquierda con el botón 3 (mover servo a 0 grados)
+    delay(50);
+    moverServo(0);
+    delay(1000);
+    LEDS = false;
+    apagarLeds();
+  }
+
+  velocimetro = digitalRead(Bvelocidad) == LOW;
+  // funcionamiento del boton velocimetro y todas sus funciones
+  if (velocimetro && !velocimetroA && !bloqueo) {
+    delay(50);
+    bloqueo = true;
+    realizarSiguienteAccion();
+    bloqueo = false;
+  }
+  
+  velocimetroA = velocimetro;
+
+  delay(20);
+}
+// en esta parte se muestra como se puede cambiar la intensidad de los leds dependiendo de la funcion que esta activada
+void actualizarLeds() {
+  if (LEDS) {
+    if (cambio == 0) {
+      analogWrite(rojo, brillo);
+    } else if (cambio == 1) {
+      analogWrite(verde, brillo);
+    } else if (cambio == 2) {
+      analogWrite(azul, brillo);
+    }
+  }
+}
+// Esta parte nos muestra como se mueve el servomotor cuando se presiona el voton del velocimetro
+void moverServo(int posicionF) {
+  if (posicion < posicionF) {
+    for (int pos = posicion; pos <= posicionF; pos++) {
+      servo.write(pos);
+      delay(15);
+    }
+  } else {
+    for (int pos = posicion; pos >= posicionF; pos--) {
+      servo.write(pos);
+      delay(15);
+    }
+  }
+  posicion = posicionF;
+}
+// Esto indica cuando se presiona el velocimetro como camia la luz del led dependiendo del angulo del servomotor
+void ledCambio() {
+  if (LEDS) {
+    if (cambio == 0) {
+      analogWrite(rojo, 255);
+      analogWrite(verde, 0);
+      analogWrite(azul, 0);
+    } else if (cambio == 1) {
+      analogWrite(rojo, 0);
+      analogWrite(verde, 255);
+      analogWrite(azul, 0);
+    } else if (cambio == 2) {
+      analogWrite(rojo, 0);
+      analogWrite(verde, 0);
+      analogWrite(azul, 255);
+    }
+  }
+}
+// Cuando se presiona el boton del velocimetro se tiene que apagar el led que estaba encendido para no confundir
+void apagarLeds() {
+  analogWrite(rojo, 0);
+  analogWrite(verde, 0);
+  analogWrite(azul, 0);
+}
+// Indica como funcionan los cambios al presionar el velocimetro, por medio de un contador que mueve el servo a cierto angulo, y enciende el led del angulo del servomotor
+void realizarSiguienteAccion() {
+  if (cambio == 0) {
+    moverServo(45);
+    analogWrite(rojo, 255);
+    analogWrite(verde, 0);
+    analogWrite(azul, 0);
+  } else if (cambio == 1) {
+    moverServo(135);
+    analogWrite(rojo, 0);
+    analogWrite(verde, 255);
+    analogWrite(azul, 0);
+  } else if (cambio == 2) {
+    moverServo(180);
+    analogWrite(rojo, 0);
+    analogWrite(verde, 0);
+    analogWrite(azul, 255);
+  } else if (cambio == 3) {
+    moverServo(0);
+    analogWrite(rojo, brillo);
+    analogWrite(verde, brillo);
+    analogWrite(azul, brillo);
+  }
+
+  cambio = (cambio + 1) % 4;  // Avanzar al siguiente índice de LED
+  delay(1000);
+}
